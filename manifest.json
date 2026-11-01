@@ -1,0 +1,10 @@
+{
+  "app_id": "fangchan",
+  "display_name": "买房记",
+  "version": "1.0.0",
+  "author": "touch-licorice-apps",
+  "description": "回合制买卖游戏：2000 元起家，60 个回合，赚够钱买一套房",
+  "entry": "index.lua",
+  "api": "2.0",
+  "permissions": []
+}
