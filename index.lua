@@ -87,6 +87,75 @@ Data.HOUSES = {
 
 Data.NO_HOUSE_RANK = '还在租房'
 
+------------------------------------------------------------------ 小道消息
+
+-- 花点钱从街坊四邻那儿买句话：某样货接下来几个回合要涨还是要跌。
+--
+-- 消息是"真会兑现"的 —— 它管的那几个回合里，游戏确实会把价格往说的方向推。
+-- 所以跟着消息做是有赚头的，但它也真的会错：
+--   七成靠得住（推的方向跟说的一致），三成是坑（推的方向正好相反），
+--   还有一成是废话 —— 钱花了，对方什么也没说。
+-- 一条消息管 2~4 个回合，得等它走完才知道准不准；中间这几回合正好照着它囤货或者抛货。
+Data.TIPS = {
+  price = 200,            -- 一条消息多少钱（跟一张刮刮乐同价）
+  per_round = 1,          -- 每回合能买几条（上一条没走完不能再买）
+  accuracy = 0.72,        -- 消息靠得住的比例
+  junk_chance = 0.10,     -- 买到一句废话的比例
+  span_lo = 2,            -- 一条消息管几个回合：2~4 个
+  span_hi = 4,
+  push = 0.10,            -- 每回合往说的方向推多少（普通的，三个回合叠起来约三成）
+  push_strong = 0.18,     -- "要暴涨/要暴跌"那种，推得更狠
+  strong_chance = 0.30,   -- 三成的消息是"暴涨暴跌"级别的
+}
+
+-- 消息都从哪儿来 —— 轻松向，来源越不靠谱越好玩
+Data.TIP_SOURCES = {
+  '隔壁王婶悄悄跟你说',
+  '菜市场大妈都在传',
+  '出租车师傅拍着胸脯保证',
+  '你从一个“内部人士”那儿买到一句话',
+  '小区业主群里有人匿名爆料',
+  '理发店的 Tony 老师边剪边说',
+  '楼下棋摊老大爷捻着棋子说',
+}
+
+-- 涨 / 跌各几种说法，还分"一般"和"来势凶猛"两种强度，每次随机挑一个，看多了不腻。
+-- 强度是有用的信息：来势凶猛的消息推得更狠，涨跌的幅度也更大。
+Data.TIP_UP = { '要涨一波', '后头看涨', '要往上走', '憋着劲儿往上' }
+Data.TIP_UP_STRONG = { '要起飞', '要暴涨', '得往上蹿一截' }
+Data.TIP_DOWN = { '要跌一波', '后头看跌', '要往下走', '怕是撑不住' }
+Data.TIP_DOWN_STRONG = { '要跳水', '要暴跌', '得往下掉一截' }
+
+-- 废话：钱花了，什么也没听着
+Data.TIP_JUNK = {
+  '对方收了钱，神秘兮兮地说了句“天机不可泄露”，就走了。',
+  '“内部人士”临时改口，只叮嘱你一句“要多喝水”。',
+  '线人把你拉到角落，说：“我啥也不知道，但我可以给你讲个笑话。”',
+  '消息贩子收了钱就消失在人海里，留下一句“祝你发财”。',
+  '对方递给你一张纸条，上面写着：“早点睡。”',
+}
+
+------------------------------------------------------------------ 成就勋章
+
+-- 一次解锁，终身点亮，存在 best.txt 里。图的是收集的乐趣，不影响钱和价格。
+Data.ACHIEVEMENTS = {
+  { id = 'first_gold',  name = '第一桶金',   desc = '一笔买卖赚到 ¥1,000。' },
+  { id = 'double',      name = '开门红',     desc = '第 5 回合结束前净资产翻一番。' },
+  { id = 'house_first', name = '有房一族',   desc = '买到第一套房子。' },
+  { id = 'house_up',    name = '换房达人',   desc = '一局里换两次房。' },
+  { id = 'villa',       name = '别墅梦',     desc = '买下独栋别墅。' },
+  { id = 'scratch10',   name = '刮刮乐常客', desc = '累计刮满 10 张刮刮乐。' },
+  { id = 'big_cell',    name = '锦鲤附体',   desc = '一格刮出 ¥5,000。' },
+  { id = 'pool',        name = '奖池猎手',   desc = '独得一次奖池。' },
+  { id = 'blank_card',  name = '空手而归',   desc = '一张卡六格全是笑脸。' },
+  { id = 'hoarder',     name = '囤货狂魔',   desc = '手里同时压着 100 件货。' },
+  { id = 'tipster',     name = '消息灵通',   desc = '累计买过 10 条小道消息。' },
+  { id = 'tip3',        name = '神算子',     desc = '一局里有 3 条小道消息应验。' },
+  { id = 'tip5',        name = '广撒网',     desc = '一局里买过 5 条小道消息。' },
+  { id = 'rich',        name = '十万富翁',   desc = '净资产突破 ¥100,000。' },
+  { id = 'allgoods',    name = '八面玲珑',   desc = '一局里八种货都做过买卖。' },
+}
+
 ------------------------------------------------------------------ 彩票站
 
 -- 只有一种玩法：六格刮刮乐。一张 ¥200，每回合最多 3 张。
@@ -252,8 +321,97 @@ function Game:newGame()
   self.lotto_n, self.lotto_spent, self.lotto_win = 0, 0, 0
   self.lotto_cells, self.lotto_open = nil, nil   -- 手上那张卡：六个格子的奖品、刮开了哪几格
   self.lotto_pool = Data.LOTTERY.pool_start  -- 本期奖池：每张票往里注钱，1/150 的机会独得
+  self:resetTip()                        -- 上一条小道消息：这一回合买，下一回合看它应不应验
+  self.tip_left = Data.TIPS.per_round    -- 这回合还能买几条消息
+  self.stat = self:newStat()             -- 这一局的账，成就勋章看它
   self.log[1] = T('开局：%1 的启动资金，%2 个回合，赚够钱买一套房。', self:money(Data.START_CASH), Data.MAX_ROUNDS)
   return self
+end
+
+------------------------------------------------------------------ 这一局的账（成就看它）
+
+-- 只记本局的事：成就里"一局内如何如何"的看这里。跨局累加的那些在界面那边（best.txt）
+function Game:newStat()
+  return { best_trade = 0, max_hold = 0, house_buys = 0, first_round = 0,
+    max_net = 0, traded = 0, tips = 0, max_cell = 0, blank_cards = 0, pool_wins = 0 }
+end
+
+-- 交易过第 i 种货，记一笔（成就"八面玲珑"要数这个）
+local function mark_traded(self, i)
+  if not self.stat then self.stat = self:newStat() end
+  if i and i >= 1 and i <= 8 then self.stat.traded = (self.stat.traded or 0) | (1 << (i - 1)) end
+end
+function Game:tradedCount()
+  if not self.stat then return 0 end
+  local n = self.stat.traded or 0
+  local c = 0
+  for i = 1, #Data.GOODS do if n & (1 << (i - 1)) ~= 0 then c = c + 1 end end
+  return c
+end
+
+-- 每回合结束、每笔买卖之后都该走一遍：把这一刻的数字记进账里
+function Game:tally()
+  if not self.stat then self.stat = self:newStat() end
+  local s = self.stat
+  local h = self:held()
+  if h > (s.max_hold or 0) then s.max_hold = h end
+  local nw = self:netWorth()
+  if nw > (s.max_net or 0) then s.max_net = nw end
+  return s
+end
+
+------------------------------------------------------------------ 小道消息
+
+function Game:resetTip()
+  self.tip_idx, self.tip_dir, self.tip_true, self.tip_junk = 0, 0, false, false
+  self.tip_strong, self.tip_span, self.tip_seen, self.tip_base = false, 0, 0, 0
+  self.tip_text = nil
+end
+
+function Game:tipText() return self.tip_text end
+function Game:tipLeft() return self.over and 0 or math.floor(self.tip_left or 0) end
+-- 手上这条还有几个回合见分晓（0 就是没揣着消息）
+function Game:tipSpan() return math.floor(self.tip_span or 0) end
+
+local function pick_one(t) return t[math.random(#t)] end
+
+-- 买一条：当场抽好（哪种货、涨还是跌、管几个回合、来势凶不凶、靠不靠得住），
+-- 接下来那几个回合里价格会真的往说的方向走 —— 走完才知道准不准。
+function Game:buyTip()
+  if self.over then return nil, '这一局已经结束了。' end
+  if (self.tip_left or 0) <= 0 then return nil, T('这回合的 %1 条已经买过了，等下一回合。', Data.TIPS.per_round) end
+  if self:tipSpan() > 0 then
+    return nil, T('上一条说的是%1，还有 %2 个回合才见分晓。',
+      Data.GOODS[self.tip_idx] and Data.GOODS[self.tip_idx].name or '行情', self:tipSpan())
+  end
+  if self.cash < Data.TIPS.price then return nil, T('一条要 %1，钱不够。', self:money(Data.TIPS.price)) end
+  self.cash = self.cash - Data.TIPS.price
+  self.tip_left = (self.tip_left or 0) - 1
+  self:resetTip()
+  self:tally()
+  self.stat.tips = (self.stat.tips or 0) + 1          -- 成就"广撒网"数这个
+  if math.random() < (Data.TIPS.junk_chance or 0) then
+    self.tip_junk = true
+    self.tip_text = pick_one(Data.TIP_JUNK)
+    return self.tip_text
+  end
+  local Tp = Data.TIPS
+  self.tip_idx = math.random(#Data.GOODS)
+  self.tip_dir = math.random(2) == 1 and 1 or -1
+  self.tip_true = math.random() < (Tp.accuracy or 0.7)
+  self.tip_strong = math.random() < (Tp.strong_chance or 0)
+  local lo = math.floor(Tp.span_lo or 2)
+  local hi = math.floor(Tp.span_hi or 3)
+  if hi < lo then hi = lo end
+  self.tip_span = lo + math.random(0, hi - lo)
+  self.tip_seen = self.tip_span
+  self.tip_base = self.prices[self.tip_idx] or Data.GOODS[self.tip_idx].base   -- 买的时候的价，最后拿它比
+  local words
+  if self.tip_dir > 0 then words = self.tip_strong and Data.TIP_UP_STRONG or Data.TIP_UP
+  else words = self.tip_strong and Data.TIP_DOWN_STRONG or Data.TIP_DOWN end
+  self.tip_text = T('%1：%2接下来 %3 个回合%4。', pick_one(Data.TIP_SOURCES),
+    Data.GOODS[self.tip_idx].name, self.tip_seen, pick_one(words))
+  return self.tip_text
 end
 
 ------------------------------------------------------------------ 价格
@@ -268,7 +426,50 @@ local function step_price(good, p)
   return math.max(1, math.floor(np))
 end
 
+-- 一条新闻之后价格也别飞出天际
+local function clamp_price(good, p)
+  return math.max(1, math.floor(math.max(good.base * 0.25, math.min(good.base * 4, p))))
+end
+
 local function pct(a, b) return math.floor((a - b) / b * 100 + 0.5) end
+
+-- 小道消息在这儿兑现：它管的那几个回合里，每回合都把价格往说的方向推一把。
+-- 靠得住的消息推的方向跟说的一致，坑人的消息推的方向正好相反 —— 所以跟着做有赚有赔。
+-- 走完最后一个回合才结算一句"应验了 / 是假的"，中间不打扰。
+-- 放在 clamp_price 后面：它得用得上 clamp_price（前面的都看不见后面声明的 local）
+function Game:resolveTip()
+  if self.tip_junk then
+    self.tip_junk = false
+    return T('上回买的那条消息，%1', self.tip_text or '什么也没听着。')
+  end
+  local i = self.tip_idx or 0
+  local span = self:tipSpan()
+  if i <= 0 or span <= 0 then return nil end
+  local good = Data.GOODS[i]
+  if not good then self:resetTip(); return nil end
+  local Tp = Data.TIPS
+  local dir = self.tip_dir or 1
+  local f = self.tip_true and dir or -dir            -- 坑人的消息：反着推
+  local push = self.tip_strong and (Tp.push_strong or 0.18) or (Tp.push or 0.10)
+  self.prices[i] = clamp_price(good, self.prices[i] * (1 + f * push))
+  self.tip_span = span - 1
+  if self.tip_span > 0 then return nil end            -- 还在路上，等下一回合
+  local from = (self.tip_base or 0) > 0 and self.tip_base or good.base
+  local to = self.prices[i]
+  local hit = (to - from) * dir > 0
+  local d = pct(to, from)
+  local move = (d >= 0 and '+' or '') .. d .. '%'
+  local msg
+  if hit then
+    self.stat.tip_true = (self.stat.tip_true or 0) + 1
+    msg = T('消息应验了：%1从 %2 走到 %3（%4）。', good.name, self:money(from), self:money(to), move)
+  else
+    msg = T('消息是假的：%1从 %2 走到 %3（%4），反着来了。', good.name, self:money(from),
+      self:money(to), move)
+  end
+  self:resetTip()
+  return msg
+end
 
 ------------------------------------------------------------------ 仓库
 
@@ -330,11 +531,6 @@ end
 local function good_index(name)
   for i, good in ipairs(Data.GOODS) do if good.name == name then return i end end
   return nil
-end
-
--- 一条新闻之后价格也别飞出天际
-local function clamp_price(good, p)
-  return math.max(1, math.floor(math.max(good.base * 0.25, math.min(good.base * 4, p))))
 end
 
 -- 执行一条新闻：改价格、给钱、扣钱、损失货物。返回一句给玩家看的话。
@@ -410,6 +606,8 @@ function Game:nextRound()
   if self.over then return { events = events, moves = moves, over = true } end
   for i = 1, #Data.GOODS do self.prev[i] = self.prices[i] end
   for i, good in ipairs(Data.GOODS) do self.prices[i] = step_price(good, self.prices[i]) end
+  -- 手上那条小道消息在这儿推价格：随机涨跌走完之后，再往消息说的方向推一把
+  local tip_msg = self:resolveTip()
   if math.random() < Data.EVENT_CHANCE then
     local e = self:fireEvent(events)
     self:note(e.text)
@@ -429,6 +627,8 @@ function Game:nextRound()
   end
   self.round = self.round + 1
   self.lotto_left = Data.LOTTERY.per_round       -- 新的一回合，又有三张名额
+  self.tip_left = Data.TIPS.per_round            -- 消息也又能买了
+  self:tally()
   local done = false
   if self.round > Data.MAX_ROUNDS then
     self.round = Data.MAX_ROUNDS
@@ -436,7 +636,7 @@ function Game:nextRound()
     done = true
   end
   if done then events[#events + 1] = T('第 %1 回合结束，60 个回合用完了。', Data.MAX_ROUNDS) end
-  return { events = events, moves = moves, over = self.over }
+  return { events = events, moves = moves, tip = tip_msg, over = self.over }
 end
 
 -- 收摊：最后一回合自己结束（或者六十回合走完）。结算画面由界面弹
@@ -536,7 +736,10 @@ function Game:scratchCell(k)
   if not c or k < 1 or k > n_cells() then return nil end
   if o[k] then return nil end
   o[k] = true
-  return cell_amount(c[k])
+  local a = cell_amount(c[k])
+  self:tally()
+  if a > (self.stat.max_cell or 0) then self.stat.max_cell = a end   -- 成就"锦鲤附体"看这个
+  return a
 end
 
 -- 六个格子里刮开了几格
@@ -568,10 +771,14 @@ function Game:cashCard()
     amounts[k] = cell_amount(c[k])
     if o[k] then total = total + amounts[k] end
   end
+  local opened = self:cardOpenCount()
   self.lotto_cells, self.lotto_open = nil, nil
+  self:tally()
   if total > 0 then
     self.cash = self.cash + total
     self.lotto_win = (self.lotto_win or 0) + total
+  elseif opened >= n_cells() then
+    self.stat.blank_cards = (self.stat.blank_cards or 0) + 1        -- 成就"空手而归"
   end
   local msgs = {}
   -- 每张票都有一次机会独得奖池，中不中奖跟卡上刮出来的钱各算各的
@@ -581,6 +788,7 @@ function Game:cashCard()
       self.cash = self.cash + pool
       self.lotto_win = (self.lotto_win or 0) + pool
       self.lotto_pool = 0
+      self.stat.pool_wins = (self.stat.pool_wins or 0) + 1          -- 成就"奖池猎手"
       msgs[#msgs + 1] = T('独得本期奖池 %1！奖池清空，从头再攒。', self:money(pool))
     end
   end
@@ -612,6 +820,8 @@ function Game:buy(i, qty)
   if cost > self.cash then return false, '钱不够。' end
   self.cash = self.cash - cost
   add_cost(self, i, qty, price)
+  mark_traded(self, i)
+  self:tally()
   return true
 end
 
@@ -621,9 +831,13 @@ function Game:sell(i, qty)
   if qty <= 0 then return false end
   if not price then return false, '这里没人收这种货。' end
   if qty > (self.inventory[i] or 0) then return false, '手上没有这么多。' end
+  local gain = math.floor(qty * (price - (self.basis[i] or 0)))   -- 这一笔赚了多少
   self.cash = self.cash + price * qty
   self.inventory[i] = self.inventory[i] - qty
   if self.inventory[i] <= 0 then self.inventory[i] = 0; self.basis[i] = 0 end
+  mark_traded(self, i)
+  self:tally()                                                    -- 先把 stat 摆好再往里记
+  if gain > (self.stat.best_trade or 0) then self.stat.best_trade = gain end
   return true
 end
 
@@ -665,6 +879,9 @@ function Game:buyHouse(i)
   if self.cash < cost then return false, T('钱不够，还差 %1。', self:money(cost - self.cash)) end
   self.cash = self.cash - cost
   self.owned = i
+  self:tally()
+  self.stat.house_buys = (self.stat.house_buys or 0) + 1
+  if (self.stat.first_round or 0) <= 0 then self.stat.first_round = self.round end
   return true, T('你买下了%1，成了有房的人。', Data.HOUSES[i].name)
 end
 
@@ -683,10 +900,22 @@ function Game:serialize()
     pv[i] = tostring(math.floor(self.prev[i] or 0))
     ba[i] = tostring(math.floor(self.basis[i] or 0))
   end
+  local s = self.stat or self:newStat()
   return {
     round = self.round, cash = self.cash, owned = self.owned,
     inventory = inv, prices = pr, prev = pv, basis = ba,
     over = self.over, log = self.log,
+    -- 小道消息：还能买几条 / 哪种货 / 涨还是跌 / 靠不靠得住 / 来势凶不凶 /
+    -- 还剩几个回合 / 一共几个回合 / 买的时候的价 / 是不是废话；原文另存一行
+    tip = { self.tip_left or 0, self.tip_idx or 0, self.tip_dir or 0,
+      (self.tip_true and 1 or 0), (self.tip_strong and 1 or 0),
+      self.tip_span or 0, self.tip_seen or 0, math.floor(self.tip_base or 0),
+      (self.tip_junk and 1 or 0) },
+    tiptxt = self.tip_text or '',
+    -- 这一局的账：成就看它。跨局累加的那些（刮了几张、买过几条消息）在界面那边
+    stat = { s.best_trade or 0, s.max_hold or 0, s.house_buys or 0, s.first_round or 0,
+      s.max_net or 0, s.traded or 0, s.tips or 0, s.max_cell or 0,
+      s.blank_cards or 0, s.pool_wins or 0 },
     lotto_left = self.lotto_left, lotto_free = self.lotto_free,
     lotto_n = self.lotto_n, lotto_spent = self.lotto_spent,
     lotto_win = self.lotto_win, lotto_pool = self.lotto_pool,
@@ -714,6 +943,44 @@ function Game:load(state)
     if self.inventory[i] <= 0 then self.basis[i] = 0 end
   end
   self.over = state.over == true or state.over == '1'
+  -- 小道消息：老存档没有这一行，读不到就是没买过
+  self:resetTip()
+  self.tip_left = Data.TIPS.per_round
+  if type(state.tip) == 'table' then
+    local tp = state.tip
+    local yn = function(v) return v == 1 or v == '1' or v == true end
+    self.tip_left = math.floor(tonumber(tp[1]) or Data.TIPS.per_round)
+    local idx = math.floor(tonumber(tp[2]) or 0)
+    self.tip_idx = (idx >= 1 and idx <= #Data.GOODS) and idx or 0
+    self.tip_dir = (tonumber(tp[3]) or 0) < 0 and -1 or 1
+    self.tip_true = yn(tp[4])
+    self.tip_strong = yn(tp[5])
+    self.tip_span = math.max(0, math.floor(tonumber(tp[6]) or 0))
+    self.tip_seen = math.max(0, math.floor(tonumber(tp[7]) or 0))
+    self.tip_base = math.floor(tonumber(tp[8]) or 0)
+    self.tip_junk = yn(tp[9])
+    if self.tip_idx <= 0 and not self.tip_junk then self.tip_span = 0 end
+    if self.tip_span <= 0 then self.tip_idx = 0 end
+    if self.tip_base <= 0 then self.tip_base = self.prices[self.tip_idx] or 0 end
+    -- 消息原文存下来：退出重进还能看见那条消息说了什么（老存档没有这一行，就当没买过）
+    self.tip_text = (type(state.tiptxt) == 'string' and state.tiptxt ~= '') and state.tiptxt or nil
+    if not self.tip_text then self:resetTip() end
+  end
+  -- 这一局的账：没有就从头记
+  self.stat = self:newStat()
+  if type(state.stat) == 'table' then
+    local f = function(n) return math.floor(tonumber(n) or 0) end
+    self.stat.best_trade = f(state.stat[1])
+    self.stat.max_hold = f(state.stat[2])
+    self.stat.house_buys = f(state.stat[3])
+    self.stat.first_round = f(state.stat[4])
+    self.stat.max_net = f(state.stat[5])
+    self.stat.traded = f(state.stat[6])
+    self.stat.tips = f(state.stat[7])
+    self.stat.max_cell = f(state.stat[8])
+    self.stat.blank_cards = f(state.stat[9])
+    self.stat.pool_wins = f(state.stat[10])
+  end
   self.lotto_left = math.floor(tonumber(state.lotto_left) or Data.LOTTERY.per_round)
   self.lotto_free = math.floor(tonumber(state.lotto_free) or 0)
   self.lotto_n = math.floor(tonumber(state.lotto_n) or 0)
@@ -770,6 +1037,10 @@ local modal = nil                        -- 弹窗：{ title, lines, rows = { { 
 local status = ''
 local ERR = nil
 local lottery_box, difficulty_box, end_game   -- 下面才定义，按钮表先挂个名字
+-- 成就：unlocked[id] = true 是历年来点亮过的；tot 是跨局累加的几个计数器
+local unlocked = {}
+local tot = { tips = 0, cards = 0 }
+local pending_ach = {}                   -- 攒着的成就，等手头这件事办完再报
 
 ------------------------------------------------------------------ 小工具
 
@@ -871,6 +1142,9 @@ local function save()
     'lotto=' .. table.concat({ st.lotto_left, st.lotto_free, st.lotto_n, st.lotto_spent,
       st.lotto_win, st.lotto_card, st.lotto_pool, st.lotto_mask }, ','),
     'log=' .. table.concat(st.log, '|'),
+    'tip=' .. table.concat(st.tip, ','),
+    'tiptxt=' .. (st.tiptxt or ''),
+    'stat=' .. table.concat(st.stat, ','),
   }, '\n'))
 end
 
@@ -892,6 +1166,7 @@ local function load_saved()
     lotto_left = lt[1], lotto_free = lt[2], lotto_n = lt[3],
     lotto_spent = lt[4], lotto_win = lt[5], lotto_card = lt[6],
     lotto_pool = lt[7], lotto_mask = lt[8],
+    tip = list(t.tip), tiptxt = t.tiptxt, stat = list(t.stat),
   })
 end
 
@@ -906,12 +1181,17 @@ local function diff() return Data.DIFFICULTY[difficulty] end
 local function show_base() return diff().show_base end      -- 显不显示基准价
 local function show_tip() return diff().show_tip end        -- 提不提示便宜还是贵
 
--- best.txt 记三样：最高净资产、买过最好的房子、每一档房子一共买到过几次（逗号分隔）
+-- best.txt 记四样：最高净资产、买过最好的房子、每一档房子一共买到过几次（逗号分隔）、
+-- 点亮的成就（逗号分隔的 id）、以及几个跨局累加的计数器
 local function save_best()
   local w = {}
   for i = 1, #Data.HOUSES do w[i] = tostring(math.floor(house_wins[i] or 0)) end
+  local a = {}
+  for _k, ac in ipairs(Data.ACHIEVEMENTS) do if unlocked[ac.id] then a[#a + 1] = ac.id end end
   write('best.txt', 'net=' .. math.floor(best_net) .. '\nhouse=' .. best_house
-    .. '\nwins=' .. table.concat(w, ','))
+    .. '\nwins=' .. table.concat(w, ',')
+    .. '\nach=' .. table.concat(a, ',')
+    .. '\ntot=' .. math.floor(tot.tips or 0) .. ',' .. math.floor(tot.cards or 0))
 end
 local function load_best()
   local t = kv(read('best.txt'))
@@ -922,12 +1202,66 @@ local function load_best()
     i = i + 1
     if i <= #Data.HOUSES then house_wins[i] = math.floor(tonumber(v) or 0) end
   end
+  unlocked = {}
+  for id in (t.ach or ''):gmatch('[^,]+') do unlocked[id] = true end
+  local n = 0
+  for v in ((t.tot or '') .. ','):gmatch('([^,]*),') do
+    n = n + 1
+    if n == 1 then tot.tips = math.floor(tonumber(v) or 0)
+    elseif n == 2 then tot.cards = math.floor(tonumber(v) or 0) end
+  end
 end
 local function record(net, house)
   if net > best_net then best_net = net end
   if house > best_house then best_house = house end
   save_best()
 end
+
+------------------------------------------------------------------ 成就
+
+-- 点亮一个成就（第一次点亮才算，重复的不再报）
+local function unlock(id)
+  if unlocked[id] then return false end
+  local found = nil
+  for _k, ac in ipairs(Data.ACHIEVEMENTS) do if ac.id == id then found = ac; break end end
+  if not found then return false end
+  unlocked[id] = true
+  save_best()
+  pending_ach[#pending_ach + 1] = found
+  return true
+end
+
+local function unlocked_count()
+  local n = 0
+  for _k, ac in ipairs(Data.ACHIEVEMENTS) do if unlocked[ac.id] then n = n + 1 end end
+  return n
+end
+
+-- 看看这一刻够得上哪几个成就。随时可以调，不会重复报
+local function check_ach()
+  local s = game.stat or {}
+  if (s.best_trade or 0) >= 1000 then unlock('first_gold') end
+  if game.round <= 5 and game:netWorth() >= Data.START_CASH * 2 then unlock('double') end
+  if game.owned > 0 then
+    unlock('house_first')
+    if (s.house_buys or 0) >= 2 then unlock('house_up') end
+    if game.owned >= #Data.HOUSES then unlock('villa') end
+  end
+  if (tot.cards or 0) >= 10 then unlock('scratch10') end
+  if (s.max_cell or 0) >= 5000 then unlock('big_cell') end
+  if (s.pool_wins or 0) >= 1 then unlock('pool') end
+  if (s.blank_cards or 0) >= 1 then unlock('blank_card') end
+  if (s.max_hold or 0) >= 100 then unlock('hoarder') end
+  if (tot.tips or 0) >= 10 then unlock('tipster') end
+  if (s.tip_true or 0) >= 3 then unlock('tip3') end
+  if (s.tips or 0) >= 5 then unlock('tip5') end
+  if (s.max_net or 0) >= 100000 then unlock('rich') end
+  if game:tradedCount() >= #Data.GOODS then unlock('allgoods') end
+end
+
+-- 手头这件事办完了，把攒下的成就报一声（一次报一个，不打断连着的操作）。
+-- 它要调 show()，可 show 在下面的弹窗段才声明 —— 这儿先挂个名字，等 show 有了再赋值。
+local flush_ach
 -- 买成了第 i 档：这一档的累计次数 +1
 local function record_house(i)
   if Data.HOUSES[i] then
@@ -1044,6 +1378,20 @@ end
 local function show(m) modal = m; refresh() end
 local function close_modal() modal = nil end
 
+-- 成就提示：一次报一个，点掉一个再报下一个，全报完了接着做 after 交代的事。
+-- 名字在"成就"那段就挂上了，函数体等到这儿（show 已经声明）才赋值。
+flush_ach = function(after)
+  if #pending_ach == 0 then if after then after() end; return end
+  local ac = pending_ach[1]
+  table.remove(pending_ach, 1)
+  show({
+    title = T('点亮成就 %1 / %2', unlocked_count(), #Data.ACHIEVEMENTS),
+    lines = { T('【%1】', ac.name), ac.desc, '成就一次点亮，终身保留，成绩页里能翻。' },
+    rows = { { { '好', function() close_modal(); flush_ach(after) end } } },
+    cancel = function() close_modal(); flush_ach(after) end,
+  })
+end
+
 local function info(lines, after)
   if type(lines) == 'string' then lines = { lines } end
   if not lines or #lines == 0 then if after then after() end return end
@@ -1113,6 +1461,7 @@ local function trade(i)
             local ok, err = game:buy(i, v)
             if ok then status = T('买入 %1 件%2，花了 %3。', v, good.name, game:money(v * game.prices[i]))
             else status = err or '买不了。' end
+            check_ach(); flush_ach()
           end, false, '买入', T('现价 %1 · 现金 %2', game:money(game.prices[i]), game:money(game.cash)))
         end, game:maxBuy(i) > 0 },
         { '卖出', function()
@@ -1126,6 +1475,7 @@ local function trade(i)
                 game:money(basis), game:money(p), game:money(v * p),
                 gain >= 0 and T('赚了 %1', game:money(gain)) or T('亏了 %1', game:money(-gain)))
             else status = err or '卖不了。' end
+            check_ach(); flush_ach()
           end, false, '卖出', T('买入价 %1 · 现价 %2', game:money(basis), game:money(game.prices[i])))
         end, held > 0 } },
       { { '取消', close_modal } },
@@ -1142,19 +1492,25 @@ local function next_round()
   local r = game:nextRound()
   save()
   if r.over then over_box(); return end
-  -- 特殊事件和价格变化分开摆：两样都要让玩家看见
+  -- 特殊事件、小道消息、价格变化，三样分开摆：都该让玩家看见
   local lines = {}
   if #r.events > 0 then
     lines[#lines + 1] = '—— 特殊事件 ——'
     for _k, s in ipairs(r.events) do lines[#lines + 1] = s end
+  end
+  if r.tip then
+    lines[#lines + 1] = '—— 小道消息 ——'
+    lines[#lines + 1] = r.tip
   end
   if #r.moves > 0 then
     lines[#lines + 1] = '—— 行情变化 ——'
     for _k, s in ipairs(r.moves) do lines[#lines + 1] = s end
   end
   if #lines == 0 then lines[1] = T('第 %1 回合，行情没什么变化。', game.round) end
+  check_ach()
   show({ title = T('第 %1 回合', game.round), lines = lines,
-    rows = { { { '知道了', close_modal } } }, cancel = close_modal })
+    rows = { { { '知道了', function() close_modal(); flush_ach() end } } },
+    cancel = function() close_modal(); flush_ach() end })
 end
 
 -- 买房：五个档位，够钱就能点；已经有一套的按原价抵扣，只补差价
@@ -1184,7 +1540,9 @@ local function house_box()
         if ok then
           record(game:netWorth(), game.owned)
           record_house(i)
-          info({ msg, T('手里还剩 %1。60 个回合还没用完，还能接着换更好的。', game:money(game.cash)) })
+          check_ach()
+          info({ msg, T('手里还剩 %1。60 个回合还没用完，还能接着换更好的。', game:money(game.cash)) },
+            function() flush_ach() end)
         else
           status = msg or '买不了。'
         end
@@ -1205,10 +1563,12 @@ local function sell_all_box()
   show({
     title = '一键清仓',
     lines = { T('把手上 %1 件货全卖掉，到手 %2。', n, game:money(got)) },
-    rows = { { { '清仓', function()
+    rows = {       { { '清仓', function()
         close_modal()
         local c, g = game:sellAll(); save()
+        game:tally()
         status = T('卖出 %1 件，到手 %2。', c, game:money(g))
+        check_ach(); flush_ach()
       end }, { '取消', close_modal } } },
     cancel = close_modal,
   })
@@ -1268,7 +1628,8 @@ cash_in = function()
   local total, amounts, extra = game:cashCard()
   save()
   if total == nil then lottery_box(); return end
-  info(card_report(total, amounts, extra), lottery_box)
+  check_ach()
+  info(card_report(total, amounts, extra), function() flush_ach(lottery_box) end)
 end
 
 -- 卡上还有没刮开的：一把全刮了，省得一个个点
@@ -1287,6 +1648,7 @@ scratch_box = function()
     cells[k] = { amount = amounts[k], open = open[k], fn = function()
         game:scratchCell(k)
         save()
+        check_ach()                       -- 只记着，等这一张刮完再一起报，不打断刮卡
         scratch_box()
       end }
   end
@@ -1335,7 +1697,13 @@ lottery_box = function()
           close_modal()
           if holding then scratch_box(); return end
           local ok, err = game:buyLottery()
-          if ok then save(); scratch_box() else status = err or '买不了。' end
+          if ok then
+            save()
+            tot.cards = (tot.cards or 0) + 1        -- 跨局累计刮了几张，成就"刮刮乐常客"看它
+            save_best()
+            check_ach()
+            scratch_box()
+          else status = err or '买不了。' end
         end, holding or can } },
       { { '关闭', close_modal } },
     },
@@ -1359,6 +1727,87 @@ difficulty_box = function()
   show({ title = '难度：只改显示多少信息', lines = lines, rows = rows, cancel = close_modal })
 end
 
+-- 小道消息：花点钱买句话，说的是某样货接下来几个回合要涨还是要跌。
+-- 七成靠得住（价格真会往说的方向走），三成是坑（反着走），还有一成是废话。
+local function tip_box()
+  local Tp = Data.TIPS
+  local lines = {
+    T('%1 一条 · 这回合还剩 %2 条', game:money(Tp.price), game:tipLeft()),
+    '说的是接下来几个回合的涨跌。',
+  }
+  local held, span = game:tipText(), game:tipSpan()
+  if held and span > 0 then
+    lines[#lines + 1] = '—— 手上这条 ——'
+    lines[#lines + 1] = held
+    lines[#lines + 1] = T('还有 %1 个回合见分晓。', span)
+    lines[#lines + 1] = game.tip_dir and (game.tip_dir > 0 and '要涨就先囤着。' or '要跌就赶紧抛。') or ''
+  else
+    lines[#lines + 1] = '手上没有消息。'
+  end
+  lines[#lines + 1] = T('这一局买过 %1 条，应验 %2 条。',
+    (game.stat and game.stat.tips) or 0, (game.stat and game.stat.tip_true) or 0)
+  lines[#lines + 1] = T('历来一共买过 %1 条。', tot.tips or 0)
+  local can = game:tipLeft() > 0 and span <= 0 and game.cash >= Tp.price and not game.over
+  show({
+    title = '小道消息',
+    lines = lines,
+    rows = {
+      { { T('买一条（%1）', game:money(Tp.price)), function()
+          close_modal()
+          local text, err = game:buyTip()
+          if not text then status = err or '买不了。'; return end
+          save()
+          tot.tips = (tot.tips or 0) + 1
+          save_best()
+          check_ach()
+          -- 先把消息摆出来看，看完再报成就
+          local tail
+          if game.tip_junk then tail = '（这句什么也没说，钱白花了。）'
+          elseif game.tip_dir > 0 then tail = T('要涨：先囤着，%1 个回合后卖。', game:tipSpan())
+          else tail = T('要跌：手上有的先抛，%1 个回合后再买回来。', game:tipSpan()) end
+          show({
+            title = '买到了一句话',
+            lines = { text, tail, T('现金还剩 %1。', game:money(game.cash)) },
+            rows = { { { '好', function() close_modal(); flush_ach() end } } },
+            cancel = function() close_modal(); flush_ach() end,
+          })
+        end, can } },
+      { { '关闭', close_modal } },
+    },
+    cancel = close_modal,
+  })
+end
+
+-- 成就墙：十四个成就一屏摆不下，摆三页，翻着看。
+-- ★ 是点亮过的，☆ 是还没拿到的（条件也摆出来，才知道往哪儿奔）。
+local ACH_PER_PAGE = 5
+local ach_page = 1
+
+local function ach_wall(page)
+  local n = #Data.ACHIEVEMENTS
+  local npages = math.ceil(n / ACH_PER_PAGE)
+  ach_page = math.max(1, math.min(page or 1, npages))
+  local a = (ach_page - 1) * ACH_PER_PAGE + 1
+  local b = math.min(n, a + ACH_PER_PAGE - 1)
+  local lines = {}
+  for i = a, b do
+    local ac = Data.ACHIEVEMENTS[i]
+    lines[#lines + 1] = (unlocked[ac.id] and '★ ' or '☆ ') .. ac.name
+    lines[#lines + 1] = '    ' .. ac.desc
+  end
+  show({
+    title = T('成就墙 %1/%2 页 · 点亮 %3 个', ach_page, npages, unlocked_count()),
+    lines = lines,
+    rows = {
+      { { '上一页', function() close_modal(); ach_wall(ach_page - 1) end, ach_page > 1 },
+        { '下一页', function() close_modal(); ach_wall(ach_page + 1) end, ach_page < npages } },
+      { { '关闭', close_modal } },
+    },
+    cancel = close_modal,
+  })
+end
+
+-- 历史成绩：只放钱和房子，成就另开一页（挤在一起两边都看不清）
 local function scores_box()
   local h = best_house > 0 and Data.HOUSES[best_house].name or '一套都没买过'
   local lines = {
@@ -1372,10 +1821,11 @@ local function scores_box()
   end
   lines[#lines + 1] = T('历年一共买到 %1 次。', total_house_wins())
   lines[#lines + 1] = '往上换房时，每一档各记一次。'
+  lines[#lines + 1] = T('成就点亮 %1 / %2，点“成就墙”翻。', unlocked_count(), #Data.ACHIEVEMENTS)
   show({
     title = '历史成绩',
     lines = lines,
-    rows = { { { '关闭', close_modal } } },
+    rows = { { { '成就墙', function() close_modal(); ach_wall(1) end }, { '关闭', close_modal } } },
     cancel = close_modal,
   })
 end
@@ -1452,8 +1902,12 @@ over_box = function()
   if card_got > 0 then
     lines[#lines + 1] = T('手上那张刮刮乐刮出 %1。', game:money(card_got))
   end
-  show({ title = '六十回合结束', lines = lines,
-    rows = { { { '新游戏', function() close_modal(); game:newGame(); save() end } } } })
+  check_ach()
+  -- 有成就刚点亮就先报一声，报完再摆结算页
+  flush_ach(function()
+    show({ title = '六十回合结束', lines = lines,
+      rows = { { { '新游戏', function() close_modal(); game:newGame(); save() end } } } })
+  end)
 end
 
 ------------------------------------------------------------------ 那一屏
@@ -1470,7 +1924,7 @@ local function button_rows()
   return {
     { { next_label(), next_round }, { '买房', house_box }, { '彩票', function() lottery_box() end } },
     { { '一键清仓', sell_all_box }, { '行情', market_box }, { '难度', function() difficulty_box() end } },
-    { { '新游戏', new_game_box }, { '成绩', scores_box } },
+    { { '新游戏', new_game_box }, { '小道消息', tip_box }, { '成绩', scores_box } },
   }
 end
 local function button_rects()
@@ -1528,8 +1982,17 @@ local function draw_board(gg, top_only)
     gg:text(bt.x + math.floor((bt.w - width(f, label)) / 2), bt.y + 16, label, { font = f })
   end
   -- 底下两行给状态：卖出后那句"买入价多少、现价多少"一句话写不下，拆两行
+  -- 手上揣着消息的时候，先提醒一句（它管着好几个回合，容易忘）
+  local tip_hint = nil
+  if game:tipSpan() > 0 and game.tip_idx and game.tip_idx > 0 then
+    local g = Data.GOODS[game.tip_idx]
+    tip_hint = T('消息：%1还要%2 %3 个回合。', g and g.name or '行情',
+      game.tip_dir and game.tip_dir > 0 and '涨' or '跌', game:tipSpan())
+  end
   local hint = status ~= '' and status
-    or (game.round >= Data.MAX_ROUNDS and '最后一回合了：点“结束游戏”收摊。' or '点商品买卖，点“下一回合”进入下一回合。')
+    or (game.round >= Data.MAX_ROUNDS and '最后一回合了：点“结束游戏”收摊。')
+    or tip_hint
+    or '点商品买卖，点“下一回合”进入下一回合。'
   local sl = wrap(hint, 'small', W - 32)
   gg:text(16, H - 46, short(sl[1] or '', 60), { font = font('small') })
   if ERR then gg:text(16, H - 24, short('ERR ' .. ERR, 52), { font = font('small') })

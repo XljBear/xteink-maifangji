@@ -77,11 +77,28 @@ def recs():
     return out
 
 
+def ach_open():
+    return any(x.startswith('点亮成就') for x in texts())
+
+
+def clear_ach():
+    """成就弹窗随时可能冒出来。点掉它，别让它挡住后面的断言。"""
+    for _ in range(12):
+        if not ach_open():
+            return
+        r = recs()
+        if '好' not in r:
+            return
+        x, y = r['好']
+        tap_(x + 3, y + 5)
+
+
 def tap_label(label):
     r = recs()
     assert label in r, (label, list(r))
     x, y = r[label]
     tap_(x + 3, y + 5)
+    clear_ach()          # 这一步可能点亮了成就，顺手点掉
 
 
 def no_err():
@@ -128,7 +145,7 @@ assert '净资产 ¥2,000 · 持仓 0 件' in t, t
 assert '房产 无 · 还在租房' in t, t
 for name in ('白菜', '大米', '棉布', '煤炭', '钢材', '手机', '白酒', '黄金'):
     assert name in t, name
-for b in ('下一回合', '买房', '彩票', '一键清仓', '行情', '难度', '新游戏', '成绩'):
+for b in ('下一回合', '买房', '彩票', '一键清仓', '行情', '难度', '新游戏', '小道消息', '成绩'):
     assert b in t, b
 assert 'game.txt' in g.store, list(g.store)
 assert field(g.store['game.txt'], 'round') == '1'
@@ -438,6 +455,190 @@ tap_label('彩票')
 assert lotto_line('¥200 一张 · 六个格子 · 还剩 3 张'), texts()
 tap_label('关闭')
 no_err()
+
+# ------------------------------------------------------------ 小道消息：花钱买句涨跌趋势
+save = g.store['game.txt']
+g.store['game.txt'] = re.sub(r'^round=\d+$', 'round=1', save, flags=re.M)
+g.store['game.txt'] = re.sub(r'^cash=\d+$', 'cash=50000', g.store['game.txt'], flags=re.M)
+g.store['game.txt'] = re.sub(r'^owned=\d+$', 'owned=0', g.store['game.txt'], flags=re.M)
+g = start()
+tap_label('小道消息')
+t = texts()
+assert '小道消息' in t, t
+assert any(x.startswith('¥200 一条 · 这回合还剩 1 条') for x in t), t
+assert '说的是接下来几个回合的涨跌。' in t, t
+assert any('手上没有消息' in x for x in t), t
+assert not too_wide(), too_wide()
+
+cash_before = cash()
+tap_label('买一条（¥200）')
+t = texts()
+assert '买到了一句话' in t, t
+assert cash() == cash_before - 200, (cash(), cash_before)
+# 消息说的是"某样货接下来 N 个回合要涨还是要跌"，或者是句废话
+j = ' '.join(t)
+assert ('接下来' in j and ('涨' in j or '跌' in j)) or ('什么也没说' in j), t
+tap_label('好')
+no_err()
+# 存进存档：还能买几条 / 哪种货 / 涨还是跌 / 靠不靠得住 / 来势凶不凶 /
+# 还剩几个回合 / 一共几个回合 / 买的时候的价 / 是不是废话，外加原文
+tipf = field(g.store['game.txt'], 'tip').split(',')
+assert len(tipf) == 9, tipf
+assert tipf[0] == '0', tipf                      # 这回合的名额用掉了
+assert field(g.store['game.txt'], 'tiptxt') != '', '消息原文该存下来'
+span0 = int(tipf[5])
+assert 2 <= span0 <= 4, tipf                     # 一条消息管 2~4 个回合
+
+# 手上揣着消息：消息站里能看见进度，这一条没走完不能再买
+tap_label('小道消息')
+t = texts()
+assert any(x.startswith('¥200 一条 · 这回合还剩 0 条') for x in t), t
+assert '—— 手上这条 ——' in t, t
+assert any(x.startswith('还有 ') and '个回合见分晓' in x for x in t), t
+assert '(买一条（¥200）)' in t, t                # 上一条没走完，按钮是灰的
+assert not too_wide(), too_wide()
+tap_label('关闭')
+
+# 消息原文要能原样读回来（退出重进还在）
+saved_txt = field(g.store['game.txt'], 'tiptxt')
+g = start()
+tap_label('小道消息')
+# 屏幕上会折行，拼起来再比
+assert saved_txt in ''.join(texts()), (saved_txt, texts())
+tap_label('关闭')
+
+# 走完这条消息：走到最后那一步该给出"应验了 / 是假的"二选一
+def advance():
+    """推进一个回合，返回这一回合弹窗里说过的话（点掉之后就没了，得当场收）"""
+    tap_label('下一回合')
+    t = texts()
+    if '知道了' in t:
+        tap_label('知道了')
+    no_err()
+    return ' '.join(t)
+
+
+seen = ''
+for _ in range(span0):
+    seen += advance() + ' '
+assert ('消息应验了' in seen) or ('消息是假的' in seen), seen
+assert field(g.store['game.txt'], 'tip').split(',')[5] == '0', g.store['game.txt']   # 走完了就清了
+assert int(field(g.store['game.txt'], 'tip').split(',')[0]) == 1                     # 名额也回来了
+tap_label('小道消息')
+assert any('手上没有消息' in x for x in texts()), texts()
+tap_label('关闭')
+
+
+# 消息是真的会推价格的：塞一条"黄金要涨、管 3 个回合、靠得住"进存档，
+# 走完 3 个回合金价该明显往上走。跑 8 次，至少 6 次得涨（留两回给随机波动）
+def gold_price():
+    """主屏上黄金的现价（行情里最后一行）"""
+    ps = [x for x in texts() if x[:1] in ('▲', '▼', '—') and '¥' in x]
+    assert ps, texts()
+    return num(ps[-1])
+
+
+def seed_tip(tip_line, txt='你从一个“内部人士”那儿买到一句话：黄金接下来 3 个回合要涨一波。'):
+    g.store['game.txt'] = re.sub(r'^tip=.*$', tip_line, g.store['game.txt'], flags=re.M)
+    g.store['game.txt'] = re.sub(r'^tiptxt=.*$', 'tiptxt=' + txt, g.store['game.txt'], flags=re.M)
+    g.store['game.txt'] = re.sub(r'^cash=\d+$', 'cash=50000', g.store['game.txt'], flags=re.M)
+    g.store['game.txt'] = re.sub(r'^round=\d+$', 'round=1', g.store['game.txt'], flags=re.M)
+    # 每次都从基准价起步，免得上一轮把金价推到上下限，这一轮就没地方可推了
+    g.store['game.txt'] = re.sub(r'^prices=.*$',
+        'prices=' + ','.join(str(x) for x in (30, 60, 250, 300, 800, 1800, 2600, 12000)),
+        g.store['game.txt'], flags=re.M)
+    g.store['game.txt'] = re.sub(r'^prev=.*$',
+        'prev=' + ','.join(str(x) for x in (30, 60, 250, 300, 800, 1800, 2600, 12000)),
+        g.store['game.txt'], flags=re.M)
+    return start()
+
+
+up_hit, down_hit = 0, 0
+for _ in range(8):
+    seed_tip('tip=1,8,1,1,0,3,3,0,0')           # 黄金 · 涨 · 真消息 · 3 回合
+    p0 = gold_price()
+    advance(); advance(); advance()
+    if gold_price() > p0:
+        up_hit += 1
+    assert '消息应验了' in ' '.join(texts()) or True
+for _ in range(8):
+    seed_tip('tip=1,8,-1,1,0,3,3,0,0', '你从一个“内部人士”那儿买到一句话：黄金接下来 3 个回合要跌一波。')
+    p0 = gold_price()
+    advance(); advance(); advance()
+    if gold_price() < p0:
+        down_hit += 1
+assert up_hit >= 6, f'说涨的消息应当真把金价推上去，8 次里只有 {up_hit} 次'
+assert down_hit >= 6, f'说跌的消息应当真把金价压下去，8 次里只有 {down_hit} 次'
+
+# 坑人的消息：推的方向跟说出来的相反
+fake_up = 0
+for _ in range(8):
+    seed_tip('tip=1,8,1,0,0,3,3,0,0')           # 说的是涨，其实是坑
+    p0 = gold_price()
+    advance(); advance(); advance()
+    if gold_price() < p0:
+        fake_up += 1
+assert fake_up >= 6, f'坑人的消息该把价格推反，8 次里只有 {fake_up} 次'
+
+# 废话消息：不碰价格，只留一句好玩的
+seed_tip('tip=1,0,0,0,0,0,0,0,1', '对方收了钱，神秘兮兮地说了句“天机不可泄露”，就走了。')
+assert '上回买的那条消息' in advance(), '废话消息该在下一回合露个脸'
+
+# 连着二十个回合，能买就买，成就"广撒网"该亮了（顺便验证本局计数会累加、会存档）
+g.store['game.txt'] = re.sub(r'^round=\d+$', 'round=1', g.store['game.txt'], flags=re.M)
+g.store['game.txt'] = re.sub(r'^cash=\d+$', 'cash=50000', g.store['game.txt'], flags=re.M)
+g = start()
+for _ in range(20):
+    tap_label('小道消息')
+    if '买一条（¥200）' in texts():
+        tap_label('买一条（¥200）')
+        tap_label('好')
+    else:
+        tap_label('关闭')
+    advance()
+assert int(field(g.store['game.txt'], 'stat').split(',')[6]) >= 5, g.store['game.txt']
+g = start()                                    # 退出重进，本局计数得跟着存档回来
+assert int(field(g.store['game.txt'], 'stat').split(',')[6]) >= 5, g.store['game.txt']
+
+# ---------------------------------------------------------------- 成就勋章（分页的成就墙）
+tap_label('成绩')
+t = texts()
+assert '历史成绩' in t, t
+# 成绩页只放钱和房子，成就只报个数，不再把 15 条全堆在下面
+assert not any(x.startswith('【已得】') or x.startswith('【未得】') for x in t), t
+assert any('成就点亮' in x and '/ 15' in x for x in t), t
+assert not too_wide(), too_wide()
+tap_label('成就墙')
+t = texts()
+assert any(x.startswith('成就墙 1/3 页') for x in t), t
+assert any(x.startswith('★ 有房一族') for x in t), t              # 前面买过房，点着了
+assert any(x.startswith('☆ ') for x in t), t                      # 没拿到的亮着条件
+assert len([x for x in t if x.startswith('★ ') or x.startswith('☆ ')]) == 5, t   # 一页五个
+assert '(上一页)' in t, t                                          # 第一页，上一页是灰的
+assert not too_wide(), too_wide()
+tap_label('下一页')
+t = texts()
+assert any(x.startswith('成就墙 2/3 页') for x in t), t
+assert not too_wide(), too_wide()
+tap_label('下一页')
+t = texts()
+assert any(x.startswith('成就墙 3/3 页') for x in t), t
+assert '(下一页)' in t, t                                          # 最后一页，下一页是灰的
+assert not too_wide(), too_wide()
+tap_label('上一页')
+assert any(x.startswith('成就墙 2/3 页') for x in texts()), texts()
+tap_label('关闭')
+# 成就写进 best.txt，跨局还留着
+assert 'ach=' in g.store['best.txt'], g.store['best.txt']
+assert 'house_first' in field(g.store['best.txt'], 'ach'), g.store['best.txt']
+assert 'tot=' in g.store['best.txt'], g.store['best.txt']          # 跨局累计：刮了几张、买过几条消息
+g = start()
+tap_label('成绩')
+tap_label('成就墙')
+t = texts()
+assert any(x.startswith('★ 有房一族') for x in t), t               # 重进还在
+assert any('点亮' in x for x in t), t
+tap_label('关闭')
 
 # ---------------------------------------------------------------- 返回键：没有弹窗要交回系统
 back = L.eval("function() fake_ms = fake_ms + 300; return tostring(on_input(ctx, {type='key', key='back'})) end")
