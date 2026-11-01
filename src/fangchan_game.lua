@@ -53,52 +53,8 @@ function Game:newGame()
   self.lotto_n, self.lotto_spent, self.lotto_win = 0, 0, 0
   self.lotto_cells, self.lotto_open = nil, nil   -- 手上那张卡：六个格子的奖品、刮开了哪几格
   self.lotto_pool = Data.LOTTERY.pool_start  -- 本期奖池：每张票往里注钱，1/150 的机会独得
-  self.debt = 0                          -- 开销掏不出来就欠着，下回合一有钱先还
-  self.upkeep_log = nil                  -- 上一回合的开销明细，界面上给玩家看
   self.log[1] = T('开局：%1 的启动资金，%2 个回合，赚够钱买一套房。', self:money(Data.START_CASH), Data.MAX_ROUNDS)
   return self
-end
-
------------------------------------------------------------------- 过日子的开销
-
-local U = Data.UPKEEP
-
--- 这一个回合的生活费：越往后越贵
-function Game:livingCost()
-  return math.floor((U.living_base or 0) + (math.max(1, self.round or 1) - 1) * (U.living_step or 0))
-end
-
--- 这一刻的仓储费：手上每一件货，按它的基准价收一点点。便宜货算下来不到一块就不收
-function Game:storageCost()
-  local rate, v = U.store_rate or 0, 0
-  for i, good in ipairs(Data.GOODS) do
-    local per = math.floor(good.base * rate)
-    if per < (U.store_min or 0) then per = U.store_min or 0 end
-    v = v + (self.inventory[i] or 0) * per
-  end
-  return v
-end
-
--- 这个回合结束时要掏多少钱（不含欠账）
-function Game:upkeep() return self:livingCost() + self:storageCost() end
-function Game:debtAmount() return math.floor(self.debt or 0) end
-
--- 掏钱：先还旧账，再付这一期的。现金不够就欠着，不会把你卡死。
--- 返回 { living, store, due, paid, short }：应付多少、实际掏了多少、欠了多少
-function Game:chargeUpkeep()
-  local living, store = self:livingCost(), self:storageCost()
-  local due = living + store + self:debtAmount()
-  local paid = math.min(self.cash, due)
-  self.cash = self.cash - paid
-  -- 还掉的部分先从旧账里出，剩下的才是这一期欠的新账
-  local old = self:debtAmount()
-  local to_old = math.min(old, paid)
-  self.debt = old - to_old
-  local short = due - paid
-  if short > 0 then self.debt = self.debt + short end
-  local r = { living = living, store = store, due = due, paid = paid, short = short }
-  self.upkeep_log = r
-  return r
 end
 
 ------------------------------------------------------------------ 价格
@@ -146,8 +102,7 @@ local function add_cost(self, i, qty, price)
   self.basis[i] = n > 0 and math.floor(((self.basis[i] or 0) * old + price * qty) / n + 0.5) or 0
 end
 function Game:houseValue() return self.owned > 0 and Data.HOUSES[self.owned].price or 0 end
--- 净资产要把欠账扣掉：欠了一屁股债的时候，它可以是负的
-function Game:netWorth() return self.cash + self:stockValue() + self:houseValue() - self:debtAmount() end
+function Game:netWorth() return self.cash + self:stockValue() + self:houseValue() end
 
 -- 相对基准价是便宜还是贵，给玩家一个参考
 function Game:tip(i)
@@ -260,8 +215,6 @@ function Game:nextRound()
     local e = self:fireEvent(events)
     self:note(e.text)
   end
-  -- 日子总要过：这一回合的生活费和仓储费在这儿结账，掏不出来就欠着
-  local up = self:chargeUpkeep()
   -- 涨跌榜：只报动过 8% 以上的，最多两样
   local best_up, best_down = nil, nil
   for i, good in ipairs(Data.GOODS) do
@@ -284,16 +237,12 @@ function Game:nextRound()
     done = true
   end
   if done then events[#events + 1] = T('第 %1 回合结束，60 个回合用完了。', Data.MAX_ROUNDS) end
-  return { events = events, moves = moves, upkeep = up, over = self.over }
+  return { events = events, moves = moves, over = self.over }
 end
 
--- 收摊：最后一回合自己结束（或者六十回合走完）。收摊也把这一回合的开销结了，
--- 不能因为最后一回合就不用过日子。结算画面由界面弹。
+-- 收摊：最后一回合自己结束（或者六十回合走完）。结算画面由界面弹
 function Game:finish()
-  if not self.over then
-    self.over = true
-    self.upkeep_log = self:chargeUpkeep()
-  end
+  self.over = true
   return true
 end
 
@@ -522,7 +471,6 @@ end
 
 function Game:rank()
   if self.owned > 0 then return Data.HOUSES[self.owned].rank end
-  if self:debtAmount() > 0 then return Data.DEBT_RANK end
   return Data.NO_HOUSE_RANK
 end
 
@@ -539,7 +487,7 @@ function Game:serialize()
   return {
     round = self.round, cash = self.cash, owned = self.owned,
     inventory = inv, prices = pr, prev = pv, basis = ba,
-    over = self.over, log = self.log, debt = self.debt,
+    over = self.over, log = self.log,
     lotto_left = self.lotto_left, lotto_free = self.lotto_free,
     lotto_n = self.lotto_n, lotto_spent = self.lotto_spent,
     lotto_win = self.lotto_win, lotto_pool = self.lotto_pool,
@@ -567,8 +515,6 @@ function Game:load(state)
     if self.inventory[i] <= 0 then self.basis[i] = 0 end
   end
   self.over = state.over == true or state.over == '1'
-  -- 老存档没有欠账这一位：没有就是没欠
-  self.debt = math.max(0, math.floor(tonumber(state.debt) or 0))
   self.lotto_left = math.floor(tonumber(state.lotto_left) or Data.LOTTERY.per_round)
   self.lotto_free = math.floor(tonumber(state.lotto_free) or 0)
   self.lotto_n = math.floor(tonumber(state.lotto_n) or 0)
